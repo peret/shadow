@@ -3,6 +3,7 @@ import com.github.jengelman.gradle.plugins.shadow.tasks.ConfigureShadowRelocatio
 buildscript {
     repositories {
         jcenter()
+        google()
         maven {
             url "https://plugins.gradle.org/m2/"
         }
@@ -59,6 +60,11 @@ apply from: file('gradle/dependencies.gradle')
 
 repositories {
     jcenter()
+    google()
+}
+
+dependencies {
+    compile 'ch.acra:acra-core:5.2.0'
 }
 
 test {
@@ -78,6 +84,7 @@ jar.enabled = false
 
 shadowJar {
     classifier = ''
+    relocate 'org.acra', 'petertwo.org.acra'
 }
 
 idea {

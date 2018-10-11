@@ -57,6 +57,8 @@ class ShadowCopyAction implements CopyAction {
     private final boolean minimizeJar
     private final UnusedTracker unusedTracker
 
+    private static int outCount = 1;
+
     ShadowCopyAction(File zipFile, ZipCompressor compressor, DocumentationRegistry documentationRegistry,
                             String encoding, List<Transformer> transformers, List<Relocator> relocators,
                             PatternSet patternSet, ShadowStats stats, GradleVersionUtil util,
@@ -102,6 +104,38 @@ class ShadowCopyAction implements CopyAction {
         } catch (Exception e) {
             throw new GradleException("Could not create ZIP '${zipFile.toString()}'", e)
         }
+
+        /*
+        stream.process(new BaseStreamAction() {
+            @Override
+            protected void visitFile(FileCopyDetails fileDetails) {
+                if (isAndroidArchive(fileDetails)) {
+                    final ZipOutputStream aarOutStr
+
+                    try {
+                        aarOutStr = compressor.createArchiveOutputStream(new File("out${outCount}.aar"))
+                        outCount += 1
+                    } catch (Exception e) {
+                        System.out.println(e)
+                        throw new GradleException("Could not create ZIP 'out${outCount}.aar'", e)
+                    }
+                    withResource(aarOutStr, new Action<ZipOutputStream>() {
+                        void execute(ZipOutputStream outputStream) {
+                            try {
+                                stream.process(new StreamAction(outputStream, encoding, transformers, relocators, patternSet,
+                                        unusedClasses, stats))
+                                processTransformers(outputStream)
+                            } catch (Exception e) {
+                                log.error('ex', e)
+                                //TODO this should not be rethrown
+                                throw e
+                            }
+                        }
+                    })
+                }
+            }
+        })
+        */
 
         try {
             withResource(zipOutStr, new Action<ZipOutputStream>() {
@@ -171,6 +205,10 @@ class ShadowCopyAction implements CopyAction {
             return fileDetails.relativePath.pathString.endsWith('.jar')
         }
 
+        protected boolean isAndroidArchive(FileCopyDetails fileDetails) {
+            return fileDetails.relativePath.pathString.endsWith('.aar')
+        }
+
         protected boolean isClass(FileCopyDetails fileDetails) {
             return FilenameUtils.getExtension(fileDetails.path) == 'class'
         }
@@ -222,7 +260,7 @@ class ShadowCopyAction implements CopyAction {
 
         @Override
         void visitFile(FileCopyDetails fileDetails) {
-            if (!isArchive(fileDetails)) {
+            if (!isArchive(fileDetails) && !isAndroidArchive(fileDetails)) {
                 try {
                     boolean isClass = isClass(fileDetails)
                     if (!remapper.hasRelocators() || !isClass) {
@@ -244,9 +282,50 @@ class ShadowCopyAction implements CopyAction {
                 } catch (Exception e) {
                     throw new GradleException(String.format("Could not add %s to ZIP '%s'.", fileDetails, zipFile), e)
                 }
-            } else {
+            } else if (isArchive(fileDetails)) {
                 processArchive(fileDetails)
+            } else {
+                processAndroidArchive(fileDetails)
             }
+        }
+
+        private void processAndroidArchive(FileCopyDetails fileDetails) {
+            System.out.println("I found the aar: ${fileDetails.path}")
+            ZipFile archive = new ZipFile(fileDetails.file)
+            List<File> archiveElements = archive.entries.findAll {
+                it.name.endsWith(".jar")
+            }.collect {
+                def tempFile = File.createTempFile(it.name, "tmp")
+                def tempOut = new FileOutputStream(tempFile)
+                IOUtils.copy(
+                        archive.getInputStream(it),
+                        tempOut
+                )
+                tempFile
+            }
+
+            archiveElements.each {
+                System.out.println("Processing archive file ${it.name}")
+                stats.startJar()
+                ZipFile innerArchive = new ZipFile(it)
+                List<ArchiveFileTreeElement> innerArchiveElements = innerArchive.entries.collect {
+                    new ArchiveFileTreeElement(new RelativeArchivePath(it, fileDetails))
+                }
+                Spec<FileTreeElement> patternSpec = patternSet.getAsSpec()
+                List<ArchiveFileTreeElement> filteredArchiveElements = innerArchiveElements.findAll { ArchiveFileTreeElement archiveElement ->
+                    patternSpec.isSatisfiedBy(archiveElement)
+                }
+                filteredArchiveElements.each { ArchiveFileTreeElement archiveElement ->
+                    if (archiveElement.relativePath.file) {
+                        System.out.println("Visiting file ${archiveElement.name}")
+                        visitArchiveFile(archiveElement, innerArchive)
+                    }
+                }
+                innerArchive.close()
+                stats.finishJar()
+            }
+
+            archive.close()
         }
 
         private void processArchive(FileCopyDetails fileDetails) {
