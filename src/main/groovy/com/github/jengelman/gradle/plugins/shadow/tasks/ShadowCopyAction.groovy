@@ -105,38 +105,6 @@ class ShadowCopyAction implements CopyAction {
             throw new GradleException("Could not create ZIP '${zipFile.toString()}'", e)
         }
 
-        /*
-        stream.process(new BaseStreamAction() {
-            @Override
-            protected void visitFile(FileCopyDetails fileDetails) {
-                if (isAndroidArchive(fileDetails)) {
-                    final ZipOutputStream aarOutStr
-
-                    try {
-                        aarOutStr = compressor.createArchiveOutputStream(new File("out${outCount}.aar"))
-                        outCount += 1
-                    } catch (Exception e) {
-                        System.out.println(e)
-                        throw new GradleException("Could not create ZIP 'out${outCount}.aar'", e)
-                    }
-                    withResource(aarOutStr, new Action<ZipOutputStream>() {
-                        void execute(ZipOutputStream outputStream) {
-                            try {
-                                stream.process(new StreamAction(outputStream, encoding, transformers, relocators, patternSet,
-                                        unusedClasses, stats))
-                                processTransformers(outputStream)
-                            } catch (Exception e) {
-                                log.error('ex', e)
-                                //TODO this should not be rethrown
-                                throw e
-                            }
-                        }
-                    })
-                }
-            }
-        })
-        */
-
         try {
             withResource(zipOutStr, new Action<ZipOutputStream>() {
                 void execute(ZipOutputStream outputStream) {
