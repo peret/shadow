@@ -305,11 +305,10 @@ class ShadowCopyAction implements CopyAction {
             }
 
             archiveElements.each {
-                System.out.println("Processing archive file ${it.name}")
                 stats.startJar()
                 ZipFile innerArchive = new ZipFile(it)
                 List<ArchiveFileTreeElement> innerArchiveElements = innerArchive.entries.collect {
-                    new ArchiveFileTreeElement(new RelativeArchivePath(it, fileDetails))
+                    new ArchiveFileTreeElement(new RelativeArchivePath(it))
                 }
                 Spec<FileTreeElement> patternSpec = patternSet.getAsSpec()
                 List<ArchiveFileTreeElement> filteredArchiveElements = innerArchiveElements.findAll { ArchiveFileTreeElement archiveElement ->
@@ -317,7 +316,6 @@ class ShadowCopyAction implements CopyAction {
                 }
                 filteredArchiveElements.each { ArchiveFileTreeElement archiveElement ->
                     if (archiveElement.relativePath.file) {
-                        System.out.println("Visiting file ${archiveElement.name}")
                         visitArchiveFile(archiveElement, innerArchive)
                     }
                 }
